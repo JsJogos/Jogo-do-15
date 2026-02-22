@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Puzzle Master - Pro</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --surface-hover: #334155;
+            --accent: #38bdf8;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --radius: 12px;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 10px;
+            overflow: hidden;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            /* Opacidade ajustada para 5% (0.05) conforme solicitado */
+            background: rgba(15, 23, 42, 0.05); 
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            backdrop-filter: blur(8px); 
+            -webkit-backdrop-filter: blur(8px);
+        }
+
+        .modal-content {
+            background: var(--surface);
+            padding: 30px;
+            border-radius: var(--radius);
+            border: 1px solid var(--accent);
+            text-align: center;
+            max-width: 320px;
+            width: 90%;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: modalPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes modalPop {
+            from { transform: scale(0.85); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .modal-content h2 { color: var(--success); margin: 0 0 10px 0; font-size: 1.6rem; }
+        .modal-content p { color: var(--text-main); margin-bottom: 25px; font-size: 1.1rem; }
+
+        .btn-next {
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+            padding: 14px 24px;
+            border-radius: var(--radius);
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            width: 100%;
+            transition: filter 0.2s;
+        }
+
+        .btn-next:active { filter: brightness(1.2); }
+
+        .game-header { width: 100%; max-width: 380px; margin-bottom: 15px; }
+        .mode-selector { display: flex; gap: 10px; margin-bottom: 10px; }
+        .mode-btn {
+            flex: 1; background: var(--surface); border: 1px solid rgba(255,255,255,0.1);
+            color: var(--text-muted); padding: 10px; border-radius: var(--radius); cursor: pointer;
+        }
+        .mode-btn.active { background: var(--surface-hover); color: var(--accent); border-color: var(--accent); cursor: default; }
+
+        .stats-bar {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+            background: var(--surface); padding: 10px; border-radius: var(--radius);
+        }
+        .stat-item { display: flex; flex-direction: column; align-items: center; }
+        .stat-label { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; }
+        .stat-value { font-weight: 700; color: var(--text-main); }
+        .accent { color: var(--accent); }
+        .success { color: var(--success); }
+
+        .puzzle-grid { display: grid; gap: 6px; background: var(--surface); padding: 10px; border-radius: var(--radius); }
+        .tile {
+            display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(145deg, #334155, #1e293b);
+            color: var(--text-main); font-weight: 700; border-radius: 8px; cursor: pointer;
+            user-select: none;
+        }
+        .tile.empty { background: transparent; cursor: default; }
+
+        .grid-4 { grid-template-columns: repeat(4, 70px); grid-template-rows: repeat(4, 70px); font-size: 2rem; }
+        .grid-5 { grid-template-columns: repeat(5, 58px); grid-template-rows: repeat(5, 58px); font-size: 1.5rem; }
+        .grid-6 { grid-template-columns: repeat(6, 48px); grid-template-rows: repeat(6, 48px); font-size: 1.2rem; }
+
+        .controls { margin-top: 20px; display: flex; gap: 8px; width: 100%; max-width: 380px; }
+        .action-btn { flex: 1; padding: 10px; border-radius: var(--radius); border: 1px solid rgba(255,255,255,0.1); background: var(--surface); color: var(--text-muted); font-weight: 600; cursor: pointer; }
+        .action-btn.danger { color: var(--danger); }
+
+        #loading-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--surface); padding: 20px; border-radius: 12px; display: none; border: 1px solid var(--accent); color: var(--accent); z-index: 200; }
+    </style>
+</head>
+<body>
+
+    <div id="loading-overlay">GERANDO NÍVEL...</div>
+
+    <div id="win-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Excelente!</h2>
+            <p id="win-message">Nível concluído.</p>
+            <button class="btn-next" onclick="closeWinModal()">Próximo nível</button>
+        </div>
+    </div>
+
+    <div class="game-header">
+        <div class="mode-selector">
+            <button class="mode-btn" id="btn-4" onclick="changeMode(4)">4x4</button>
+            <button class="mode-btn" id="btn-5" onclick="changeMode(5)">5x5</button>
+            <button class="mode-btn" id="btn-6" onclick="changeMode(6)">6x6</button>
+        </div>
+        <div class="stats-bar">
+            <div class="stat-item"><span class="stat-label">Nível</span><span class="stat-value accent" id="lvl-display">1</span></div>
+            <div class="stat-item"></div>
+            <div class="stat-item"><span class="stat-label">Mov.</span><span class="stat-value" id="moves-display">0</span></div>
+            <div class="stat-item"><span class="stat-label">Média</span><span class="stat-value success" id="avg-display">0</span></div>
+        </div>
+    </div>
+
+    <div id="puzzle-container" class="puzzle-grid"></div>
+
+    <div class="controls">
+        <button class="action-btn" onclick="confirmResetLevel()">Reiniciar</button>
+        <button class="action-btn" onclick="moreGames()">Mais jogos</button>
+        <button class="action-btn danger" onclick="resetAll()">Reset Total</button>
+    </div>
+
+    <script>
+        const GAME_KEYS = ['p_last_size', 'p_levels', 'p_mode_total_moves', 'p_mode_current_moves', 'p_mode_last_avgs', 'p_mode_boards'];
+        const MODE_LIMITS = { 4: 80, 5: 160, 6: 240 };
+        
+        let gridSize = parseInt(localStorage.getItem('p_last_size')) || 4;
+        let levels = JSON.parse(localStorage.getItem('p_levels')) || { 4: 1, 5: 1, 6: 1 };
+        let modeTotalMoves = JSON.parse(localStorage.getItem('p_mode_total_moves')) || { 4: 0, 5: 0, 6: 0 };
+        let modeCurrentMoves = JSON.parse(localStorage.getItem('p_mode_current_moves')) || { 4: 0, 5: 0, 6: 0 };
+        let modeLastAvgs = JSON.parse(localStorage.getItem('p_mode_last_avgs')) || { 4: 0, 5: 0, 6: 0 };
+        let modeBoards = JSON.parse(localStorage.getItem('p_mode_boards')) || { 4: null, 5: null, 6: null };
+        let board = [];
+
+        function save() {
+            localStorage.setItem('p_last_size', gridSize);
+            localStorage.setItem('p_levels', JSON.stringify(levels));
+            localStorage.setItem('p_mode_total_moves', JSON.stringify(modeTotalMoves));
+            localStorage.setItem('p_mode_current_moves', JSON.stringify(modeCurrentMoves));
+            localStorage.setItem('p_mode_last_avgs', JSON.stringify(modeLastAvgs));
+            localStorage.setItem('p_mode_boards', JSON.stringify(modeBoards));
+        }
+
+        function updateUI() {
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`btn-${gridSize}`).classList.add('active');
+            document.getElementById('lvl-display').innerText = levels[gridSize];
+            document.getElementById('moves-display').innerText = modeCurrentMoves[gridSize];
+            document.getElementById('avg-display').innerText = modeLastAvgs[gridSize];
+            document.getElementById('puzzle-container').className = `puzzle-grid grid-${gridSize}`;
+            save();
+        }
+
+        function getNeighbors(idx) {
+            const r = Math.floor(idx / gridSize), c = idx % gridSize;
+            const res = [];
+            if (r > 0) res.push(idx - gridSize);
+            if (r < gridSize - 1) res.push(idx + gridSize);
+            if (c > 0) res.push(idx - 1);
+            if (c < gridSize - 1) res.push(idx + 1);
+            return res;
+        }
+
+        function shuffleBySteps(steps) {
+            board = Array.from({ length: (gridSize * gridSize) - 1 }, (_, i) => i + 1).concat(null);
+            let lastIdx = -1;
+            for (let i = 0; i < steps; i++) {
+                const emptyIdx = board.indexOf(null);
+                const n = getNeighbors(emptyIdx).filter(x => x !== lastIdx);
+                const moveIdx = n[Math.floor(Math.random() * n.length)];
+                [board[emptyIdx], board[moveIdx]] = [board[moveIdx], board[emptyIdx]];
+                lastIdx = emptyIdx;
+            }
+        }
+
+        function generateRandom() {
+            let arr = Array.from({ length: (gridSize * gridSize) - 1 }, (_, i) => i + 1).concat(null);
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            board = arr;
+        }
+
+        function isSolvable() {
+            let invCount = 0;
+            const flatBoard = board.filter(x => x !== null);
+            for (let i = 0; i < flatBoard.length - 1; i++) {
+                for (let j = i + 1; j < flatBoard.length; j++) {
+                    if (flatBoard[i] > flatBoard[j]) invCount++;
+                }
+            }
+            if (gridSize % 2 !== 0) return invCount % 2 === 0;
+            const emptyIdx = board.indexOf(null);
+            const rowFromBottom = gridSize - Math.floor(emptyIdx / gridSize);
+            return (rowFromBottom % 2 === 0) ? (invCount % 2 !== 0) : (invCount % 2 === 0);
+        }
+
+        async function initGame() {
+            const loader = document.getElementById('loading-overlay');
+            loader.style.display = 'block';
+            await new Promise(r => setTimeout(r, 50));
+
+            if (modeBoards[gridSize]) {
+                board = modeBoards[gridSize];
+            } else {
+                const currentLevel = levels[gridSize];
+                const limit = MODE_LIMITS[gridSize];
+                if (currentLevel <= limit) {
+                    shuffleBySteps(currentLevel);
+                } else {
+                    do { generateRandom(); } while (!isSolvable() || board.slice(0, -1).every((v, i) => v === i + 1));
+                }
+                modeBoards[gridSize] = board;
+            }
+
+            render();
+            loader.style.display = 'none';
+            updateUI();
+        }
+
+        function render() {
+            const container = document.getElementById('puzzle-container');
+            container.innerHTML = '';
+            board.forEach((val, idx) => {
+                const div = document.createElement('div');
+                div.className = `tile ${val === null ? 'empty' : ''}`;
+                div.innerText = val || '';
+                if (val !== null) div.onclick = () => move(idx);
+                container.appendChild(div);
+            });
+        }
+
+        function move(idx) {
+            const emptyIdx = board.indexOf(null);
+            if (getNeighbors(emptyIdx).includes(idx)) {
+                [board[idx], board[emptyIdx]] = [board[emptyIdx], board[idx]];
+                modeTotalMoves[gridSize]++;
+                modeCurrentMoves[gridSize]++;
+                modeBoards[gridSize] = board;
+                render();
+                updateUI();
+                
+                if (board.slice(0, -1).every((v, i) => v === i + 1)) {
+                    setTimeout(() => {
+                        modeLastAvgs[gridSize] = Math.round(modeTotalMoves[gridSize] / levels[gridSize]);
+                        document.getElementById('win-message').innerText = `Nível ${levels[gridSize]} completo!`;
+                        document.getElementById('win-modal').style.display = 'flex';
+                        modeBoards[gridSize] = null;
+                        save();
+                    }, 200);
+                }
+            }
+        }
+
+        function closeWinModal() {
+            document.getElementById('win-modal').style.display = 'none';
+            modeCurrentMoves[gridSize] = 0;
+            levels[gridSize]++;
+            initGame();
+        }
+
+        function changeMode(s) {
+            if (s === gridSize) return;
+            gridSize = s;
+            initGame();
+        }
+
+        function confirmResetLevel() { 
+            if(confirm("Reiniciar nível atual? Isso gerará um novo tabuleiro.")) {
+                modeCurrentMoves[gridSize] = 0;
+                modeBoards[gridSize] = null; 
+                initGame(); 
+            }
+        }
+
+        function moreGames() { window.location.href = "https://jsjogos.github.io/"; }
+
+        function resetAll() { 
+            if(confirm("Deseja resetar todo o progresso deste jogo?") && prompt("Digite 1 para confirmar:") === "1") { 
+                // Correção: Remove apenas as chaves deste jogo específico
+                GAME_KEYS.forEach(key => localStorage.removeItem(key));
+                
+                levels = { 4: 1, 5: 1, 6: 1 };
+                modeTotalMoves = { 4: 0, 5: 0, 6: 0 };
+                modeCurrentMoves = { 4: 0, 5: 0, 6: 0 };
+                modeLastAvgs = { 4: 0, 5: 0, 6: 0 };
+                modeBoards = { 4: null, 5: null, 6: null };
+                gridSize = 4;
+                save();
+                location.reload(); 
+            } 
+        }
+
+        initGame();
+    </script>
+</body>
+</html>
